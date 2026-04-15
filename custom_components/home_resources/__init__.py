@@ -64,8 +64,13 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     else:
         _LOGGER.warning("[home_resources] resources-card.js not found at %s", js_path)
 
-    # Auto-register Lovelace resource
-    hass.async_create_task(_async_register_lovelace_resource(hass))
+    # Auto-register Lovelace resource — wait for HA to fully start first
+    async def _register_when_ready(event=None):
+        await _async_register_lovelace_resource(hass)
+
+    hass.bus.async_listen_once(
+        "homeassistant_started", _register_when_ready
+    )
 
     return True
 
@@ -73,15 +78,25 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 async def _async_register_lovelace_resource(hass: HomeAssistant) -> None:
     """Automatically add the JS card to Lovelace resources."""
     try:
+        lovelace = hass.data.get("lovelace")
+        if lovelace is None:
+            _LOGGER.debug("[home_resources] Lovelace not available, skipping resource registration")
+            return
+
         resource_url = f"{STATIC_URL}?v={LOVELACE_RESOURCE_VERSION}"
         resources_store = Store(hass, 1, "lovelace_resources")
         resources_data = await resources_store.async_load() or {"items": []}
         items = resources_data.get("items", [])
 
-        existing = next((i for i in items if STATIC_URL in i.get("url", "")), None)
+        existing = None
+        for item in items:
+            if STATIC_URL in item.get("url", ""):
+                existing = item
+                break
 
         if existing is None:
-            new_id = max((i.get("id", 0) for i in items), default=0) + 1
+            existing_ids = [int(item.get("id", 0)) for item in items]
+            new_id = max(existing_ids, default=0) + 1
             items.append({"id": new_id, "type": "module", "url": resource_url})
             resources_data["items"] = items
             await resources_store.async_save(resources_data)

@@ -95,8 +95,8 @@ async def _async_register_lovelace_resource(hass: HomeAssistant) -> None:
                 break
 
         if existing is None:
-            existing_ids = [int(item.get("id", 0)) for item in items]
-            new_id = max(existing_ids, default=0) + 1
+            import uuid
+            new_id = uuid.uuid4().hex
             items.append({"id": new_id, "type": "module", "url": resource_url})
             resources_data["items"] = items
             await resources_store.async_save(resources_data)

@@ -1,7 +1,7 @@
 /**
  * resources-card.js
  * Home Resources — Lovelace custom card for Home Assistant
- * v1.0.5
+ * v1.0.9
  *
  * Config (YAML):
  *   type: custom:resources-card
@@ -38,6 +38,7 @@ const TRANSLATIONS = {
     loadError:          'Chyba načítania',
     noPhoto:            '— bez fotky —',
     noLocation:         '—',
+    sizePlaceholder:    'napr. 280g',
     expiresOk:          'OK',
     expiresSoon:        'Čoskoro',
     expiresOver:        'Expirované',
@@ -109,6 +110,7 @@ const TRANSLATIONS = {
     loadError:          'Load error',
     noPhoto:            '— no photo —',
     noLocation:         '—',
+    sizePlaceholder:    'e.g. 280g',
     expiresOk:          'OK',
     expiresSoon:        'Soon',
     expiresOver:        'Expired',
@@ -180,6 +182,7 @@ const TRANSLATIONS = {
     loadError:          'Chyba načtení',
     noPhoto:            '— bez fotky —',
     noLocation:         '—',
+    sizePlaceholder:    'např. 280g',
     expiresOk:          'OK',
     expiresSoon:        'Brzy',
     expiresOver:        'Prošlé',
@@ -251,6 +254,7 @@ const TRANSLATIONS = {
     loadError:          'Ladefehler',
     noPhoto:            '— kein Foto —',
     noLocation:         '—',
+    sizePlaceholder:    'z.B. 280g',
     expiresOk:          'OK',
     expiresSoon:        'Bald',
     expiresOver:        'Abgelaufen',
@@ -546,10 +550,13 @@ const CSS = `
 }
 .unit-date input:focus{background:var(--divider-color,#e0e0e0);border-radius:4px;padding:1px 4px;}
 .unit-loc select{
-  border:none;background:transparent;color:var(--secondary-text-color);
-  font-size:12px;cursor:pointer;font-family:inherit;outline:none;max-width:110px;
+  border:1px solid var(--divider-color,#e0e0e0);
+  background:var(--secondary-background-color,#f5f5f5);
+  color:var(--primary-text-color);
+  font-size:12px;cursor:pointer;font-family:inherit;outline:none;
+  max-width:130px;border-radius:var(--r-sm);padding:2px 6px;
 }
-.unit-loc select:focus{background:var(--secondary-background-color,#f5f5f5);border-radius:4px;padding:1px 4px;}
+.unit-loc select:focus{border-color:var(--primary-color,#03a9f4);}
 
 /* Expiry badges */
 .eb{font-size:11px;padding:2px 6px;border-radius:10px;font-weight:500;white-space:nowrap;}
@@ -559,6 +566,15 @@ const CSS = `
 .eb-none{background:#F1EFE8;color:#5F5E5A;}
 
 .unit-spacer{flex:1;}
+.unit-size input{
+  border:1px solid var(--divider-color,#e0e0e0);
+  background:var(--secondary-background-color,#f5f5f5);
+  color:var(--primary-text-color);
+  font-size:12px;font-family:inherit;outline:none;
+  border-radius:var(--r-sm);padding:2px 6px;width:80px;
+}
+.unit-size input:focus{border-color:var(--primary-color,#03a9f4);}
+.unit-size input::placeholder{color:var(--secondary-text-color);opacity:.7;}
 .btn-unit-del{padding:3px 8px;font-size:11px;border-radius:var(--r-sm);border:1px solid #F09595;background:transparent;color:#A32D2D;cursor:pointer;font-family:inherit;}
 .btn-add-unit{
   width:100%;padding:5px;font-size:12px;border-radius:var(--r-md);
@@ -735,8 +751,11 @@ class InventoryCard extends HTMLElement {
       if (!data.categories|| !data.categories.length) data.categories = [...this._t.defaultCategories];
       if (!data.locations || !data.locations.length)  data.locations  = [...this._t.defaultLocations];
       if (!data.items) data.items = [];
-      // migrate old units: add location field if missing
-      data.items.forEach(item => (item.units || []).forEach(u => { if (!('location' in u)) u.location = null; }));
+      // migrate old units: add missing fields
+      data.items.forEach(item => (item.units || []).forEach(u => {
+        if (!('location' in u)) u.location = null;
+        if (!('size' in u)) u.size = '';
+      }));
       this._data = data; this._loading = false; this._setStatus(this._t.loaded);
     } catch (err) {
       console.error('[resources-card] load:', err);
@@ -1038,6 +1057,14 @@ class InventoryCard extends HTMLElement {
       ls.onchange = e => { unit.location = e.target.value || null; this._save(); this._render(); };
       lw.appendChild(ls); ur.appendChild(lw);
 
+      /* Size input */
+      const sw = document.createElement('span'); sw.className = 'unit-size';
+      const si = document.createElement('input'); si.type = 'text'; si.placeholder = t.sizePlaceholder;
+      si.value = unit.size || '';
+      si.onclick = e => e.stopPropagation();
+      si.oninput = e => { unit.size = e.target.value; this._save(); };
+      sw.appendChild(si); ur.appendChild(sw);
+
       const sp = document.createElement('span'); sp.className = 'unit-spacer'; ur.appendChild(sp);
 
       const del = document.createElement('button'); del.className = 'btn-unit-del'; del.textContent = '✕';
@@ -1048,7 +1075,7 @@ class InventoryCard extends HTMLElement {
     detail.appendChild(ul);
 
     const addU = document.createElement('button'); addU.className = 'btn-add-unit'; addU.textContent = t.addUnit;
-    addU.onclick = e => { e.stopPropagation(); if (!item.units) item.units = []; item.units.push({ id: nextId(item.units), expiry: null, location: null }); this._expandedItems.add(item.id); this._save(); this._render(); };
+    addU.onclick = e => { e.stopPropagation(); if (!item.units) item.units = []; item.units.push({ id: nextId(item.units), expiry: null, location: null, size: '' }); this._expandedItems.add(item.id); this._save(); this._render(); };
     detail.appendChild(addU);
 
     const acts = document.createElement('div'); acts.className = 'item-actions';

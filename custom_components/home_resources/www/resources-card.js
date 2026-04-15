@@ -42,6 +42,10 @@ const TRANSLATIONS = {
     expiresSoon:        'Čoskoro',
     expiresOver:        'Expirované',
     expiresNone:        'bez dátumu',
+    expiresToday:       'Vyprší dnes!',
+    expiresTomorrow:    'Vyprší zajtra',
+    expiresInDays:      (d) => `Expiruje o ${d} ${d === 1 ? 'deň' : d < 5 ? 'dni' : 'dní'}`,
+    expiredDaysAgo:     (d) => `Expirované pred ${d} ${d === 1 ? 'dňom' : d < 5 ? 'dňami' : 'dňami'}`,
     addUnit:            '+ Kus',
     rename:             '✏️ Premenovať',
     delete:             '🗑 Odstrániť',
@@ -109,6 +113,10 @@ const TRANSLATIONS = {
     expiresSoon:        'Soon',
     expiresOver:        'Expired',
     expiresNone:        'no date',
+    expiresToday:       'Expires today!',
+    expiresTomorrow:    'Expires tomorrow',
+    expiresInDays:      (d) => `Expires in ${d} day${d === 1 ? '' : 's'}`,
+    expiredDaysAgo:     (d) => `Expired ${d} day${d === 1 ? '' : 's'} ago`,
     addUnit:            '+ Unit',
     rename:             '✏️ Rename',
     delete:             '🗑 Delete',
@@ -176,6 +184,10 @@ const TRANSLATIONS = {
     expiresSoon:        'Brzy',
     expiresOver:        'Prošlé',
     expiresNone:        'bez data',
+    expiresToday:       'Vyprší dnes!',
+    expiresTomorrow:    'Vyprší zítra',
+    expiresInDays:      (d) => `Vyprší za ${d} ${d === 1 ? 'den' : d < 5 ? 'dny' : 'dní'}`,
+    expiredDaysAgo:     (d) => `Prošlé před ${d} ${d === 1 ? 'dnem' : 'dny'}`,
     addUnit:            '+ Kus',
     rename:             '✏️ Přejmenovat',
     delete:             '🗑 Odstranit',
@@ -243,6 +255,10 @@ const TRANSLATIONS = {
     expiresSoon:        'Bald',
     expiresOver:        'Abgelaufen',
     expiresNone:        'kein Datum',
+    expiresToday:       'Läuft heute ab!',
+    expiresTomorrow:    'Läuft morgen ab',
+    expiresInDays:      (d) => `Läuft in ${d} Tag${d === 1 ? '' : 'en'} ab`,
+    expiredDaysAgo:     (d) => `Vor ${d} Tag${d === 1 ? '' : 'en'} abgelaufen`,
     addUnit:            '+ Einheit',
     rename:             '✏️ Umbenennen',
     delete:             '🗑 Löschen',
@@ -329,8 +345,10 @@ function itemColor(item) {
 function expiryBadge(expiry, t) {
   if (!expiry) return { cls: 'eb-none', txt: t.expiresNone };
   const d = daysDiff(expiry);
-  if (d < 0)    return { cls: 'eb-over', txt: t.expiresOver };
-  if (d <= 180) return { cls: 'eb-warn', txt: t.expiresSoon };
+  if (d < 0)    return { cls: 'eb-over', txt: t.expiredDaysAgo(Math.abs(d)) };
+  if (d === 0)  return { cls: 'eb-over', txt: t.expiresToday };
+  if (d === 1)  return { cls: 'eb-warn', txt: t.expiresTomorrow };
+  if (d <= 180) return { cls: 'eb-warn', txt: t.expiresInDays(d) };
   return { cls: 'eb-ok', txt: t.expiresOk };
 }
 
@@ -496,7 +514,7 @@ const CSS = `
 /* Tag row under name */
 .item-tags{display:flex;flex-wrap:wrap;gap:4px;margin-top:3px;align-items:center;}
 .tag{font-size:11px;padding:1px 7px;border-radius:10px;white-space:nowrap;border:1px solid;}
-.tag-cat{background:var(--secondary-background-color,#f5f5f5);color:var(--secondary-text-color);border-color:var(--divider-color,#e0e0e0);}
+.tag-cat{background:#EEF2FF;color:#3730A3;border-color:#C7D2FE;}
 
 .item-qty{font-size:13px;font-weight:500;min-width:34px;text-align:right;color:var(--secondary-text-color);white-space:nowrap;}
 .item-arrow{font-size:10px;color:var(--secondary-text-color);transition:transform .2s;display:inline-block;margin-left:2px;}
@@ -630,7 +648,8 @@ const CSS = `
 .name-input{width:100%;}
 
 /* Modal footer */
-.modal-foot{padding:10px 18px;border-top:1px solid var(--divider-color,#e0e0e0);display:flex;gap:8px;justify-content:flex-end;flex-shrink:0;}
+.modal-foot{padding:10px 18px;border-top:1px solid var(--divider-color,#e0e0e0);display:flex;gap:8px;align-items:center;flex-shrink:0;}
+.settings-version{font-size:11px;color:var(--secondary-text-color);margin-right:auto;opacity:.7;}
 
 /* Add item modal */
 .modal-body{padding:16px 18px;display:flex;flex-direction:column;gap:12px;overflow-y:auto;flex:1;}
@@ -808,7 +827,6 @@ class InventoryCard extends HTMLElement {
     const header = document.createElement('div'); header.className = 'header';
     const titleEl = document.createElement('div'); titleEl.className = 'header-title';
     titleEl.textContent = this._configTitle || t.title;
-    const verEl = document.createElement('span'); verEl.className = 'header-version'; verEl.textContent = 'v' + this._version;
 
     // Settings gear button
     const gearBtn = document.createElement('button'); gearBtn.className = 'btn-icon'; gearBtn.title = t.settingsTitle;
@@ -818,7 +836,7 @@ class InventoryCard extends HTMLElement {
     const addBtn = document.createElement('button'); addBtn.className = 'btn-add-item';
     addBtn.textContent = t.btnAddItem; addBtn.onclick = () => { this._activeModal = 'add-item'; this._render(); };
 
-    header.appendChild(titleEl); header.appendChild(verEl);
+    header.appendChild(titleEl);
     header.appendChild(gearBtn); header.appendChild(addBtn);
     card.appendChild(header);
 
@@ -1091,6 +1109,8 @@ class InventoryCard extends HTMLElement {
     box.appendChild(panelWrap);
 
     const foot = document.createElement('div'); foot.className = 'modal-foot';
+    const versionBadge = document.createElement('span'); versionBadge.className = 'settings-version'; versionBadge.textContent = 'v' + this._version;
+    foot.appendChild(versionBadge);
     foot.appendChild(this._btn(t.btnClose, () => this._closeModal()));
     box.appendChild(foot);
 

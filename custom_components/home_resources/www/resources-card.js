@@ -673,13 +673,14 @@ class InventoryCard extends HTMLElement {
     this._pickerTarget   = null;
     this._pickerSelected = null;
     this._pickerTab      = 'lib';
+    this._initialized    = false;
   }
 
   set hass(hass) {
-    const first = !this._hass;
     this._hass = hass;
     this._t    = resolveLocale(hass?.locale?.language);
-    if (first) {
+    if (!this._initialized) {
+      this._initialized = true;
       this._fetchVersion();
       this._load().then(() => this._render());
       this._pollTimer = setInterval(() => this._load().then(() => this._render()), POLL_MS);
@@ -764,11 +765,12 @@ class InventoryCard extends HTMLElement {
     const root = this.shadowRoot;
     const t    = this._t;
 
+    // Ensure style tag always exists (survives HA re-renders)
     if (!root.querySelector('style')) {
-      const s = document.createElement('style'); s.textContent = CSS; root.appendChild(s);
+      const s = document.createElement('style'); s.textContent = CSS; root.prepend(s);
     }
 
-    // Lightbox (persistent, outside card)
+    // Lightbox: persistent node outside .card, recreate if lost
     if (!root.querySelector('.lightbox')) {
       const lb = document.createElement('div'); lb.className = 'lightbox';
       const img = document.createElement('img'); img.alt = '';
@@ -778,8 +780,11 @@ class InventoryCard extends HTMLElement {
       lb.appendChild(cls); lb.appendChild(img); root.appendChild(lb);
     }
 
-    let card = root.querySelector('.card');
-    if (!card) { card = document.createElement('div'); card.className = 'card'; root.appendChild(card); }
+    // .card is always recreated from scratch to avoid stale state
+    const existingCard = root.querySelector('.card');
+    if (existingCard) existingCard.remove();
+    const card = document.createElement('div'); card.className = 'card'; root.appendChild(card);
+
     if (this._loading) { card.innerHTML = `<div class="empty">${t.loading}</div>`; return; }
 
     const { items = [], categories = [], locations = [] } = this._data;
@@ -798,7 +803,6 @@ class InventoryCard extends HTMLElement {
       return true;
     });
 
-    card.innerHTML = '';
 
     /* ── Header ── */
     const header = document.createElement('div'); header.className = 'header';

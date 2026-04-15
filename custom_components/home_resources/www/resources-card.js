@@ -366,7 +366,7 @@ const CSS = `
 .card{
   background:var(--card-background-color,#fff);
   border-radius:var(--ha-card-border-radius,12px);
-  padding:16px; color:var(--primary-text-color,#212121); max-width:720px;
+  padding:16px; color:var(--primary-text-color,#212121); width:100%;
 }
 
 /* ── Header ── */
@@ -765,10 +765,10 @@ class InventoryCard extends HTMLElement {
     const root = this.shadowRoot;
     const t    = this._t;
 
-    // Ensure style tag always exists (survives HA re-renders)
-    if (!root.querySelector('style')) {
-      const s = document.createElement('style'); s.textContent = CSS; root.prepend(s);
-    }
+    // Always (re)inject style — HA can wipe shadowRoot on view switch
+    const existingStyle = root.querySelector('style');
+    if (existingStyle) existingStyle.remove();
+    const s = document.createElement('style'); s.textContent = CSS; root.prepend(s);
 
     // Lightbox: persistent node outside .card, recreate if lost
     if (!root.querySelector('.lightbox')) {

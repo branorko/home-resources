@@ -1,6 +1,7 @@
 """Home Resources — household stock management for Home Assistant."""
 from __future__ import annotations
 
+import json
 import logging
 import os
 
@@ -18,6 +19,19 @@ STORAGE_VERSION = 1
 STATIC_URL = "/home_resources_static/resources-card.js"
 LOVELACE_RESOURCE_VERSION = 1
 
+
+def _read_version() -> str:
+    """Read version from manifest.json at runtime — single source of truth."""
+    try:
+        manifest_path = os.path.join(os.path.dirname(__file__), "manifest.json")
+        with open(manifest_path, encoding="utf-8") as f:
+            return json.load(f).get("version", "?")
+    except Exception:
+        return "?"
+
+
+VERSION = _read_version()
+
 DEFAULT_DATA = {
     "items": [],
     "categories": ["Food", "Hygiene", "Medicine"],
@@ -28,7 +42,6 @@ DEFAULT_DATA = {
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     """Set up the integration on HA start."""
 
-    # Persistent storage via HA Store (.storage/home_resources.data)
     store = Store(hass, STORAGE_VERSION, STORAGE_KEY)
     data = await store.async_load()
 
@@ -44,10 +57,11 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
             len(data.get("photos", [])),
         )
 
-    hass.data[DOMAIN] = {"store": store, "data": data}
+    hass.data[DOMAIN] = {"store": store, "data": data, "version": VERSION}
 
-    # Register REST API endpoint
+    # Register REST API endpoints
     hass.http.register_view(InventoryDataView(hass))
+    hass.http.register_view(InventoryVersionView())
 
     # Register static JS file
     js_path = os.path.join(os.path.dirname(__file__), "www", "resources-card.js")
@@ -64,14 +78,12 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     else:
         _LOGGER.warning("[home_resources] resources-card.js not found at %s", js_path)
 
-    # Auto-register Lovelace resource — wait for HA to fully start first
     async def _register_when_ready(event=None):
         await _async_register_lovelace_resource(hass)
 
-    hass.bus.async_listen_once(
-        "homeassistant_started", _register_when_ready
-    )
+    hass.bus.async_listen_once("homeassistant_started", _register_when_ready)
 
+    _LOGGER.info("[home_resources] Version %s loaded", VERSION)
     return True
 
 
@@ -83,7 +95,7 @@ async def _async_register_lovelace_resource(hass: HomeAssistant) -> None:
             _LOGGER.debug("[home_resources] Lovelace not available, skipping resource registration")
             return
 
-        resource_url = f"{STATIC_URL}?v={LOVELACE_RESOURCE_VERSION}"
+        resource_url = f"{STATIC_URL}?v={VERSION}"
         resources_store = Store(hass, 1, "lovelace_resources")
         resources_data = await resources_store.async_load() or {"items": []}
         items = resources_data.get("items", [])
@@ -112,6 +124,21 @@ async def _async_register_lovelace_resource(hass: HomeAssistant) -> None:
         _LOGGER.warning("[home_resources] Could not register Lovelace resource: %s", exc)
 
 
+class InventoryVersionView(HomeAssistantView):
+    """REST endpoint /api/home_resources/version — returns version from manifest.json."""
+
+    url = "/api/home_resources/version"
+    name = "api:home_resources:version"
+    requires_auth = True
+
+    async def get(self, request):
+        from aiohttp.web import Response
+        return Response(
+            text=json.dumps({"version": VERSION}),
+            content_type="application/json",
+        )
+
+
 class InventoryDataView(HomeAssistantView):
     """REST API endpoint /api/home_resources/data — read and write inventory data."""
 
@@ -123,17 +150,12 @@ class InventoryDataView(HomeAssistantView):
         self._hass = hass
 
     async def get(self, request):
-        """Return current inventory data."""
         from aiohttp.web import Response
-        import json
-
         data = self._hass.data.get(DOMAIN, {}).get("data", DEFAULT_DATA)
         return Response(text=json.dumps(data), content_type="application/json")
 
     async def post(self, request):
-        """Save new inventory data."""
         from aiohttp.web import Response
-        import json
 
         try:
             body = await request.json()

@@ -694,6 +694,8 @@ class InventoryCard extends HTMLElement {
     this._statusError   = false;
     this._saveTimer     = null;
     this._pollTimer     = null;
+    this._isSaving      = false;   // true while a save POST is in-flight
+    this._pendingLoad   = false;   // true if a poll arrived during a save
     this._version       = '…';
     this._configTitle   = null;
 
@@ -743,6 +745,10 @@ class InventoryCard extends HTMLElement {
   _token() { return this._hass?.auth?.data?.access_token || ''; }
 
   async _load() {
+    // If a save POST is currently in-flight, skip overwriting local data with
+    // potentially stale server data.  A fresh load will be triggered once the
+    // save completes (see _save below).
+    if (this._isSaving) { this._pendingLoad = true; return; }
     try {
       const r = await fetch(API_URL, { headers: { Authorization: 'Bearer ' + this._token() } });
       if (!r.ok) throw new Error('HTTP ' + r.status);
@@ -756,6 +762,9 @@ class InventoryCard extends HTMLElement {
         if (!('location' in u)) u.location = null;
         if (!('size' in u)) u.size = '';
       }));
+      // Final guard: if a save started while we were awaiting the response,
+      // do not clobber the local (newer) data.
+      if (this._isSaving) { this._pendingLoad = true; return; }
       this._data = data; this._loading = false; this._setStatus(this._t.loaded);
     } catch (err) {
       console.error('[resources-card] load:', err);
@@ -770,11 +779,21 @@ class InventoryCard extends HTMLElement {
   _save() {
     clearTimeout(this._saveTimer);
     this._saveTimer = setTimeout(async () => {
+      this._isSaving = true;
+      this._pendingLoad = false;
       try {
         const r = await fetch(API_URL, { method: 'POST', headers: { Authorization: 'Bearer ' + this._token(), 'Content-Type': 'application/json' }, body: JSON.stringify(this._data) });
         if (!r.ok) throw new Error('HTTP ' + r.status);
         this._setStatus(this._t.saved);
       } catch (e) { console.error('[resources-card] save:', e); this._setStatus(this._t.saveError, true); }
+      finally {
+        this._isSaving = false;
+        // If a poll was blocked during the save, do a reconciling load now.
+        if (this._pendingLoad) {
+          this._pendingLoad = false;
+          this._load().then(() => this._render());
+        }
+      }
     }, 600);
   }
 

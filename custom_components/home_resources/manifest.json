@@ -1,13 +1,17 @@
 {
   "domain": "home_resources",
   "name": "Home Resources",
-  "version": "1.0.9",
+  "version": "1.0.10",
   "documentation": "https://gitlab.com/branorko/home-resources",
   "issue_tracker": "https://gitlab.com/branorko/home-resources/-/issues",
-  "codeowners": ["@branorko"],
+  "codeowners": [
+    "@branorko"
+  ],
   "requirements": [],
   "dependencies": [],
-  "after_dependencies": ["frontend"],
+  "after_dependencies": [
+    "frontend"
+  ],
   "iot_class": "local_push",
   "config_flow": true
 }
